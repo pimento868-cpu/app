@@ -857,6 +857,7 @@ export default function Notebook() {
                     data-testid="sheet"
                     style={{
                         "--cell": `${cell}px`,
+                        "--font-size": `${size}px`,
                         "--paper-grain": paperTexture / 100,
                         "--hand-font": `"${font}"`,
                         "--math-j": mathJitter / 100,

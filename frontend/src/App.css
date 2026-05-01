@@ -401,8 +401,8 @@ body,
         var(--cell) var(--cell),
         var(--cell) var(--cell);
     background-position:
-        0 calc(14px - var(--cell) * 0.22),
-        0 calc(14px - var(--cell) * 0.22);
+        0 calc(14px - var(--cell) / 2 + var(--font-size, 22px) * 0.28),
+        0 calc(14px - var(--cell) / 2 + var(--font-size, 22px) * 0.28);
     background-blend-mode: multiply, multiply;
 }
 
