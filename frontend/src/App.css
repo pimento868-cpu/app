@@ -333,7 +333,7 @@ body,
     }
 }
 
-/* Caja superior con etiqueta de página */
+/* Caja superior con renglones manuscritos */
 .sheet .header-box {
     position: relative;
     height: calc(var(--cell) * 2 + 6px);
@@ -348,20 +348,40 @@ body,
         var(--grid-line-strong) calc(50% + 0.6px),
         transparent calc(50% + 0.6px)
     );
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 14px;
+    overflow: hidden;
 }
 
-.sheet .page-label {
-    font-family: "Caveat", cursive;
-    font-size: 22px;
+/* Encabezado escrito a mano: misma letra/tinta/jitter que el cuerpo,
+   pero con line-height ajustado al alto de cada renglón del header
+   (cell + 3 = mitad del header-box). Así las líneas base de cada
+   renglón caen sobre la línea central y la línea inferior. */
+.sheet .header-handwriting {
+    position: absolute;
+    inset: 0;
+    padding: 6px 18px 0 18px;
+    line-height: calc(var(--cell) + 3px);
     color: var(--ink-blue);
+    font-family: "Caveat", cursive;
     z-index: 2;
-    background: rgba(247, 241, 226, 0.85);
-    padding: 0 6px;
-    border-radius: 4px;
+    mix-blend-mode: multiply;
+}
+
+.sheet .header-handwriting .header-ln {
+    display: block;
+    min-height: calc(var(--cell) + 3px);
+}
+
+.sheet .header-handwriting .math-inline {
+    display: inline-block;
+    vertical-align: baseline;
+    margin: 0 2px;
+}
+
+.sheet.all-black .header-handwriting,
+.sheet.all-black .header-handwriting .blue,
+.sheet.all-black .header-handwriting .title,
+.sheet.all-black .header-handwriting .underline-red {
+    color: #1a1a1a !important;
 }
 
 /* Bloque principal con cuadrícula */
@@ -381,8 +401,8 @@ body,
         var(--cell) var(--cell),
         var(--cell) var(--cell);
     background-position:
-        0 calc(14px - var(--cell) * 0.25),
-        0 calc(14px - var(--cell) * 0.25);
+        0 calc(14px - var(--cell) * 0.22),
+        0 calc(14px - var(--cell) * 0.22);
     background-blend-mode: multiply, multiply;
 }
 

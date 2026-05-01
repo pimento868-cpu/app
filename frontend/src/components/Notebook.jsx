@@ -259,14 +259,14 @@ function HandText({ text, cls, seed, ink = 0.4, vv = 0.5, hv = 0.45 }) {
         const wr1 = prng(seed, ti * 17 + 5);
         const wr2 = prng(seed, ti * 17 + 7);
         const wr4 = prng(seed, ti * 17 + 11);
-        const wRot = (wr1 - 0.5) * 1.5 * vv;
-        const wDy = (wr2 - 0.5) * 2.6 * vv;
-        const wDx = (wr4 - 0.5) * 1.4 * hv;
-        const progress = cumLen / totalLen;
-        const lineTilt =
-            progress > 0.55 ? -(progress - 0.55) * 1.2 * vv : 0;
-        const lineLift =
-            progress > 0.55 ? -(progress - 0.55) * 2.5 * vv : 0;
+        const wRot = (wr1 - 0.5) * 1.2 * vv;
+        // wDy reducido a la mitad: las palabras siguen mejor la línea base
+        const wDy = (wr2 - 0.5) * 1.2 * vv;
+        const wDx = (wr4 - 0.5) * 1.2 * hv;
+        // Sin lineLift/lineTilt sistemáticos: el texto se queda sobre la línea
+        // (antes derivaba siempre hacia arriba al final de cada renglón).
+        const lineTilt = 0;
+        const lineLift = 0;
 
         const chars = [];
         const word = [...tok.value];
@@ -275,8 +275,9 @@ function HandText({ text, cls, seed, ink = 0.4, vv = 0.5, hv = 0.45 }) {
             const r2 = prng(seed + ti * 41, ci * 3 + 2);
             const r3 = prng(seed + ti * 41, ci * 3 + 3);
             const r4 = prng(seed + ti * 41, ci * 3 + 4);
-            const rot = (r1 - 0.5) * 2.0 * vv;
-            const dy = (r2 - 0.5) * 1.8 * vv;
+            const rot = (r1 - 0.5) * 1.6 * vv;
+            // dy reducido: cada letra se mantiene cerca de la línea base
+            const dy = (r2 - 0.5) * 0.9 * vv;
             const dx = (r4 - 0.5) * 0.8 * hv;
             // Letter spacing SOLO aditivo: nunca deja que las letras se solapen
             const letterSpacingPx = Math.max(0, (r4 - 0.3) * 0.6 * hv);
@@ -560,6 +561,7 @@ export default function Notebook() {
     const saved = loadInitialState();
 
     const [text, setText] = useState(saved?.text ?? DEFAULT_TEXT);
+    const [headerText, setHeaderText] = useState(saved?.headerText ?? "");
     const [cell, setCell] = useState(saved?.cell ?? 26);
     const [font, setFont] = useState(saved?.font ?? "Caveat");
     const [size, setSize] = useState(saved?.size ?? 22);
@@ -599,7 +601,7 @@ export default function Notebook() {
     /* Persistencia en localStorage */
     useEffect(() => {
         const data = {
-            text, cell, font, size, inkIntensity, vertVariation,
+            text, headerText, cell, font, size, inkIntensity, vertVariation,
             horizVariation, paperTexture, mathJitter, paperDefects,
             paperRot, paperTilt, paperCurve, bgScale, bgX, bgY,
             allBlack, customBg, currentPage,
@@ -609,7 +611,7 @@ export default function Notebook() {
         } catch {
             /* localStorage lleno (probablemente customBg muy grande) */
         }
-    }, [text, cell, font, size, inkIntensity, vertVariation, horizVariation,
+    }, [text, headerText, cell, font, size, inkIntensity, vertVariation, horizVariation,
         paperTexture, mathJitter, paperDefects, paperRot, paperTilt,
         paperCurve, bgScale, bgX, bgY, allBlack, customBg, currentPage]);
 
@@ -808,6 +810,17 @@ export default function Notebook() {
                     spellCheck={false}
                 />
 
+                <label htmlFor="header-txt">Hoja superior (encabezado)</label>
+                <textarea
+                    id="header-txt"
+                    data-testid="header-text-input"
+                    value={headerText}
+                    onChange={(e) => setHeaderText(e.target.value)}
+                    placeholder={'Ej:\nNombre / Materia\nFecha'}
+                    spellCheck={false}
+                    style={{ minHeight: 70 }}
+                />
+
                 <div className="tips">
                     Tips de formato:
                     <br />• Fórmulas entre <code>$...$</code> (en línea) o{" "}
@@ -856,9 +869,79 @@ export default function Notebook() {
                     <div className="lamp-shadow" aria-hidden="true" />
                     <div className="micro-wrinkles" aria-hidden="true" />
                     <div className="header-box" data-testid="header-box">
-                        <span className="page-label" data-testid="page-label">
-                            Hoja {currentPage + 1} / {pageCount}
-                        </span>
+                        <div
+                            className="header-handwriting handwriting"
+                            data-testid="header-handwriting"
+                            style={{
+                                fontFamily: `"${font}", cursive`,
+                                fontSize: `${size}px`,
+                            }}
+                        >
+                            {headerText.trim() === "" ? null : (
+                                headerText.split("\n").slice(0, 2).map((raw, i) => {
+                                    const segs = splitSegments(raw);
+                                    const autoTitle =
+                                        /^\s*Ejercicio\b/i.test(raw) ||
+                                        /^\s*\d+\s*[-–]/.test(raw);
+                                    if (
+                                        segs.length === 0 ||
+                                        (segs.length === 1 &&
+                                            segs[0].type === "text" &&
+                                            segs[0].value.trim() === "")
+                                    ) {
+                                        return (
+                                            <span key={i} className="header-ln">
+                                                {"\u00A0"}
+                                            </span>
+                                        );
+                                    }
+                                    return (
+                                        <span key={i} className="header-ln">
+                                            {segs.map((seg, j) => {
+                                                if (seg.type === "math") {
+                                                    return (
+                                                        <span
+                                                            key={j}
+                                                            className="math-inline"
+                                                            dangerouslySetInnerHTML={{
+                                                                __html: renderMathHTML(seg.value, false),
+                                                            }}
+                                                        />
+                                                    );
+                                                }
+                                                if (seg.type === "mathDisplay") {
+                                                    return (
+                                                        <span
+                                                            key={j}
+                                                            className="math-inline"
+                                                            dangerouslySetInnerHTML={{
+                                                                __html: renderMathHTML(seg.value, false),
+                                                            }}
+                                                        />
+                                                    );
+                                                }
+                                                const parts = parseText(seg.value, autoTitle);
+                                                return (
+                                                    <span key={j}>
+                                                        {parts.map((p, k) => (
+                                                            <HandText
+                                                                key={k}
+                                                                text={p.text}
+                                                                cls={p.cls}
+                                                                seed={1000 + i * 131 + k * 17 + j * 3}
+                                                                ink={ink}
+                                                                vv={vv}
+                                                                hv={hv}
+                                                            />
+                                                        ))}
+                                                    </span>
+                                                );
+                                            })}
+                                        </span>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
                     <div
                         className="grid-box"
