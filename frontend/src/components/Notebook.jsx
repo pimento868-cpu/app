@@ -583,9 +583,10 @@ export default function Notebook() {
     const [customBg, setCustomBg] = useState(saved?.customBg ?? null); // data URL o null
     const [currentPage, setCurrentPage] = useState(saved?.currentPage ?? 0);
 
-    /* ===== Multi-página: layout dinámico por overflow ===== */
-    const [pageHeight, setPageHeight] = useState(600);
-    const [totalHeight, setTotalHeight] = useState(0);
+    /* ===== Multi-página: cortes calculados por línea (sin partir letras) ===== */
+    const [pageOffsets, setPageOffsets] = useState([0]);
+    const [pageStep, setPageStep] = useState(520);
+    const [gridPadBottom, setGridPadBottom] = useState(22);
 
     const sheetRef = useRef(null);
     const gridBoxRef = useRef(null);
@@ -615,16 +616,60 @@ export default function Notebook() {
         paperTexture, mathJitter, paperDefects, paperRot, paperTilt,
         paperCurve, bgScale, bgX, bgY, allBlack, customBg, currentPage]);
 
-    /* Recalcular alto total y alto de página al cambiar texto/estilos */
+    /* Recalcular cortes de página: cada página debe romper SIEMPRE entre
+       líneas completas, nunca a media letra. Medimos cada línea (.ln)
+       renderizada y empezamos una nueva página justo en la primera
+       línea que no quepa entera. */
     useLayoutEffect(() => {
         const hw = handwritingRef.current;
         const gb = gridBoxRef.current;
         if (!hw || !gb) return;
         const measure = () => {
-            const ph = gb.clientHeight;
-            const th = hw.scrollHeight;
-            setPageHeight(ph);
-            setTotalHeight(th);
+            // Calculamos el área útil de escritura como un MÚLTIPLO EXACTO
+            // de la celda. Así nunca queda media celda visible en el borde
+            // inferior, y cada página contiene un número entero de líneas.
+            const cs = getComputedStyle(gb);
+            const padT = parseFloat(cs.paddingTop) || 0;
+            const clientH = gb.clientHeight;
+            const usable = clientH - padT;
+            // Reservamos al menos un poco para que no se pegue al borde
+            const steps = Math.max(1, Math.floor((usable - 4) / cell));
+            const step = steps * cell;
+            const newPadB = Math.max(4, usable - step);
+            setPageStep(step);
+            setGridPadBottom(newPadB);
+
+            const handDiv = hw.firstElementChild;
+            if (!handDiv) {
+                setPageOffsets([0]);
+                return;
+            }
+            const lines = Array.from(handDiv.children);
+            if (lines.length === 0) {
+                setPageOffsets([0]);
+                return;
+            }
+            const offsets = [0];
+            let currentTop = 0;
+            const totalH = handDiv.scrollHeight;
+            for (let i = 0; i < lines.length; i++) {
+                const lineTop = lines[i].offsetTop;
+                const lineBottom =
+                    i + 1 < lines.length
+                        ? lines[i + 1].offsetTop
+                        : totalH;
+                // Si esta línea no cabe entera en la página actual,
+                // y NO es la primera línea de la página, la mandamos
+                // a la siguiente.
+                if (
+                    lineBottom - currentTop > step + 0.5 &&
+                    lineTop > currentTop + 0.5
+                ) {
+                    offsets.push(lineTop);
+                    currentTop = lineTop;
+                }
+            }
+            setPageOffsets(offsets);
         };
         measure();
         const ro = new ResizeObserver(measure);
@@ -633,17 +678,7 @@ export default function Notebook() {
         return () => ro.disconnect();
     }, [text, cell, size, font, vertVariation, horizVariation, mathJitter]);
 
-    /* Snap a la cuadrícula: cada página debe terminar en una línea entera */
-    const pageStep = useMemo(() => {
-        if (pageHeight <= 0) return 1;
-        const lines = Math.max(1, Math.floor(pageHeight / cell));
-        return lines * cell;
-    }, [pageHeight, cell]);
-
-    const pageCount = useMemo(() => {
-        if (totalHeight <= 0 || pageStep <= 0) return 1;
-        return Math.max(1, Math.ceil(totalHeight / pageStep));
-    }, [totalHeight, pageStep]);
+    const pageCount = pageOffsets.length;
 
     /* Si la página actual queda fuera de rango, ajustar */
     useEffect(() => {
@@ -763,12 +798,6 @@ export default function Notebook() {
     };
 
     const bgUrl = customBg || DEFAULT_BG_URL;
-
-    /* === Páginas (auto-split por overflow) === */
-    const pageOffsets = useMemo(
-        () => Array.from({ length: pageCount }, (_, i) => i * pageStep),
-        [pageCount, pageStep],
-    );
 
     return (
         <div
